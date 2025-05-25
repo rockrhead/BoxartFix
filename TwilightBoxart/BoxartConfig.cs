@@ -1,77 +1,39 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using TwilightBoxart.Helpers;
+using KirovAir.Core.Config;
+using SixLabors.Primitives;
+using TwilightBoxart.Models.Base;
 
 namespace TwilightBoxart
 {
-    public interface ISharedConfig
-    {
-        int BoxartWidth { get; set; }
-        int BoxartHeight { get; set; }
-        bool KeepAspectRatio { get; set; }
-        BoxartBorderStyle BoxartBorderStyle { get; set; }
-        int BoxartBorderThickness { get; set; }
-        uint BoxartBorderColor { get; set; }
-    }
-
-    public interface IAppConfig : ISharedConfig
-    {
-        string SdRoot { get; set; }
-        string BoxartPath { get; set; }
-        string SettingsPath { get; set; }
-        bool OverwriteExisting { get; set; }
-    }
-
-    public class BoxartConfig : IniSettings, IAppConfig
+    public class BoxartConfig : IniSettings
     {
         public string SdRoot { get; set; } = "";
         public string BoxartPath { get; set; } = @"{sdroot}\_nds\TWiLightMenu\boxart";
-        public string SettingsPath { get; set; } = @"{sdroot}\_nds\TWiLightMenu\settings.ini";
         public int BoxartWidth { get; set; } = 128;
         public int BoxartHeight { get; set; } = 115;
-        public bool KeepAspectRatio { get; set; } = true;
-        public bool OverwriteExisting { get; set; } = false;
-        public BoxartBorderStyle BoxartBorderStyle { get; set; }
-        public int BoxartBorderThickness { get; set; }
-        public uint BoxartBorderColor { get; set; }
-        public bool DisableUpdates { get; set; } = false;
+        public bool AdjustAspectRatio { get; set; } = true;
+
         public const string MagicDir = "_nds";
         public const string FileName = "TwilightBoxart.ini";
-        public const string Repository = "KirovAir/TwilightBoxart";
-
-        public static Version Version = new Version(0, 7, 0);
         public static string Credits = "TwilightBoxart - Created by KirovAir." + Environment.NewLine + "Loads of love to the devs of TwilightMenu++, LibRetro, GameTDB and the maintainers of the No-Intro DB.";
-
-        public static string ApiUrl = "https://boxart.kirovair.com/api";
-        public static string RepositoryUrl = $"https://github.com/{Repository}";
-        public static string RepositoryReleasesUrl = $"https://github.com/{Repository}/releases";
-
+        
         public void Load()
         {
             Load(FileName);
         }
 
-        public string GetCorrectBoxartPath(string root = "")
-        {
-            return GetCorrectPath(BoxartPath, root);
-        }
-
-        public string GetCorrectSettingsIniPath(string root = "")
-        {
-            return GetCorrectPath(SettingsPath, root);
-        }
-
-        public string GetCorrectPath(string pathMask, string root = "")
+        public string GetBoxartPath(string root = "")
         {
             if (root == "")
             {
                 root = SdRoot;
             }
 
-            if (!pathMask.StartsWith("{sdroot}"))
+            if (!BoxartPath.StartsWith("{sdroot}"))
             {
-                return pathMask;
+                return BoxartPath;
             }
 
             if (root.Contains(Path.DirectorySeparatorChar.ToString()))
@@ -101,27 +63,62 @@ namespace TwilightBoxart
                 catch { }
             }
 
-            return Path.Combine(root.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar, pathMask.Replace("{sdroot}", "").TrimStart(Path.DirectorySeparatorChar));
+            return Path.Combine(root.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar, BoxartPath.Replace("{sdroot}", "").TrimStart(Path.DirectorySeparatorChar));
         }
 
-        public static readonly List<string> SupportedFiles = new List<string>
+        // Used as backup mapping.
+        public static readonly Dictionary<string, ConsoleType> ExtensionMapping = new Dictionary<string, ConsoleType>
         {
-            ".nes",
-            ".sfc",
-            ".smc",
-            ".snes",
-            ".gb",
-            ".sgb",
-            ".gbc",
-            ".gba",
-            ".nds",
-            ".ds",
-            ".dsi",
-            ".gg",
-            ".gen",
-            ".sms",
-            ".fds",
-            ".zip"
+            {".nes", ConsoleType.NintendoEntertainmentSystem},
+            {".sfc", ConsoleType.SuperNintendoEntertainmentSystem},
+            {".smc", ConsoleType.SuperNintendoEntertainmentSystem},
+            {".snes", ConsoleType.SuperNintendoEntertainmentSystem},
+            {".gb", ConsoleType.GameBoy},
+            {".sgb", ConsoleType.GameBoy},
+            {".gbc", ConsoleType.GameBoyColor},
+            {".gba", ConsoleType.GameBoyAdvance},
+            {".nds", ConsoleType.NintendoDS},
+            {".ds", ConsoleType.NintendoDS},
+            {".dsi", ConsoleType.NintendoDSi},
+            {".gg", ConsoleType.SegaGameGear},
+            {".gen", ConsoleType.SegaGenesis},
+            {".sms", ConsoleType.SegaMasterSystem},
+            {".fds", ConsoleType.FamicomDiskSystem},
+            {".zip", ConsoleType.Unknown }
+        };
+
+        /// <summary>
+        /// Mapping to merge some ConsoleTypes in the DB.
+        /// </summary>
+        public static Dictionary<ConsoleType, ConsoleType> NoIntroDbMapping = new Dictionary<ConsoleType, ConsoleType>
+        {
+            {ConsoleType.NintendoDS, ConsoleType.NintendoDS},
+            {ConsoleType.NintendoDSDownloadPlay, ConsoleType.NintendoDS},
+            {ConsoleType.NintendoDSi, ConsoleType.NintendoDSi},
+            {ConsoleType.NintendoDSiDigital, ConsoleType.NintendoDSi}
+        };
+
+        public static Dictionary<ConsoleType, Size> AspectRatioMapping = new Dictionary<ConsoleType, Size>
+        {
+            // FDS / GBC / GB
+            {ConsoleType.FamicomDiskSystem, new Size(1, 1)},
+            {ConsoleType.GameBoy, new Size(1, 1)},
+            {ConsoleType.GameBoyColor, new Size(1, 1)},
+            {ConsoleType.GameBoyAdvance, new Size(1, 1)},
+ 
+            // NES / GEN/MD / SFC / MS/ GG
+            {ConsoleType.NintendoEntertainmentSystem, new Size(84, 115)},
+            {ConsoleType.SegaGenesis, new Size(84, 115)},
+            {ConsoleType.SegaMasterSystem, new Size(84, 115)},
+            {ConsoleType.SegaGameGear, new Size(84, 115)},
+
+            // SNES
+            {ConsoleType.SuperNintendoEntertainmentSystem, new Size(158, 115)}
+        };
+
+        public static Dictionary<ConsoleType, string> LibRetroDatUrls = new Dictionary<ConsoleType, string>
+        {
+            {ConsoleType.NintendoEntertainmentSystem, "https://github.com/libretro/libretro-database/raw/master/dat/Nintendo%20-%20Nintendo%20Entertainment%20System.dat"}
         };
     }
 }
